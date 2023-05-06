@@ -3,5 +3,5 @@ Allows players to easily change what tier they want to be on in the game for the
 
 Please run the following sql query as well in acore_characters database
 
-ALTER TABLE character_settings MODIFY data VARCHAR(10); (edited)
+ALTER TABLE character_settings MODIFY data VARCHAR(10); 
 
