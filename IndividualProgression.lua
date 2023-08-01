@@ -104,7 +104,7 @@ end
 RegisterCreatureGossipEvent(npcId, 1, OnGossipHello)
 RegisterCreatureGossipEvent(npcId, 2, OnGossipSelect)
 
-function OnPlayerLogout(event, player)
+function Individual_OnPlayerLogout(event, player)
   local tier = player:GetUInt32Value(PlayerTierKey)
   local tierChanged = player:GetUInt32Value(PlayerChangedTierKey) -- Check if the player has changed their progression
   if tier >= 0 and tierChanged == 1 then
@@ -118,18 +118,14 @@ end
 
 
 
-RegisterPlayerEvent(4, OnPlayerLogout)
 
-function OnCreatureSpawn(event, creature)
-  creature:SetEquipmentSlots(32262, 33755, 0)
-end
 
-function OnPlayerLogin(event, player)
+function Individual_OnPlayerLogin(event, player)
   local creature = player:GetNearestCreature(100, npcId)
   if creature then
     creature:SetEquipmentSlots(32262, 33755, 0)
   end
 end
 
-RegisterPlayerEvent(3, OnPlayerLogin)
-RegisterCreatureEvent(npcId, 5, OnCreatureSpawn)
+RegisterPlayerEvent(4, Individual_OnPlayerLogout)
+RegisterCreatureEvent(npcId, 5, Individual_OnCreatureSpawn)
