@@ -101,21 +101,17 @@ function IndividualProgression.OnGossipSelect(event, player, object, sender, int
 end
 
 function IndividualProgression.DelayedDatabaseUpdate(eventId, delay, repeats, playerData)
-    print("Debug: DelayedDatabaseUpdate triggered")  
 
     if playerData.tier >= 0 and playerData.tierChanged == 1 then
         local deleteSQL = "DELETE FROM character_settings WHERE guid = " .. playerData.guid .. " AND source = 'mod-individual-progression'"
-        print("Debug: DELETE SQL Query: " .. deleteSQL)  
         CharDBExecute(deleteSQL)
         local dataString = string.format("%u", playerData.tier)
         local insertSQL = "INSERT INTO character_settings (guid, source, data) VALUES (" .. playerData.guid .. ", 'mod-individual-progression', '" .. dataString .. "')"
-        print("Debug: INSERT SQL Query: " .. insertSQL)  
         CharDBExecute(insertSQL)
     end
 end
 
 function IndividualProgression.Individual_OnPlayerLogout(event, player)
-    print("Debug: Individual_OnPlayerLogout triggered") 
     local tier = player:GetUInt32Value(IndividualProgression.PlayerTierKey)
     local tierChanged = player:GetUInt32Value(IndividualProgression.PlayerChangedTierKey)
     local guid = player:GetGUIDLow()
@@ -124,7 +120,7 @@ function IndividualProgression.Individual_OnPlayerLogout(event, player)
         tierChanged = tierChanged,
         guid = guid
     }
-    CreateLuaEvent(function(eventId, delay, repeats) IndividualProgression.DelayedDatabaseUpdate(eventId, delay, repeats, playerData) end, 1000, 1)
+    CreateLuaEvent(function(eventId, delay, repeats) IndividualProgression.DelayedDatabaseUpdate(eventId, delay, repeats, playerData) end, 550, 1)
 end
 
 RegisterCreatureGossipEvent(IndividualProgression.npcId, 1, IndividualProgression.OnGossipHello)
