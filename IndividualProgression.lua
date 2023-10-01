@@ -100,20 +100,33 @@ function IndividualProgression.OnGossipSelect(event, player, object, sender, int
   end
 end
 
-RegisterCreatureGossipEvent(IndividualProgression.npcId, 1, IndividualProgression.OnGossipHello)
-RegisterCreatureGossipEvent(IndividualProgression.npcId, 2, IndividualProgression.OnGossipSelect)
+function IndividualProgression.DelayedDatabaseUpdate(eventId, delay, repeats, playerData)
+    print("Debug: DelayedDatabaseUpdate triggered")  
 
-function IndividualProgression.Individual_OnPlayerLogout(event, player)
-  local tier = player:GetUInt32Value(IndividualProgression.PlayerTierKey)
-  local tierChanged = player:GetUInt32Value(IndividualProgression.PlayerChangedTierKey) -- Check if the player has changed their progression
-  if tier >= 0 and tierChanged == 1 then
-    local guid = player:GetGUIDLow()
-    print("Updating character_settings with guid: " .. guid .. " and tier: " .. tier) -- Add this line to log the data being saved
-    CharDBExecute("UPDATE character_settings SET data = '" .. string.format("%u", tier) .. "' WHERE guid = " .. guid .. " AND source = 'mod-individual-progression'") -- Update this line
-    player:SetUInt32Value(IndividualProgression.PlayerTierKey, 0)
-    player:SetUInt32Value(IndividualProgression.PlayerChangedTierKey, 0) -- Reset the flag
-  end
+    if playerData.tier >= 0 and playerData.tierChanged == 1 then
+        local deleteSQL = "DELETE FROM character_settings WHERE guid = " .. playerData.guid .. " AND source = 'mod-individual-progression'"
+        print("Debug: DELETE SQL Query: " .. deleteSQL)  
+        CharDBExecute(deleteSQL)
+        local dataString = string.format("%u", playerData.tier)
+        local insertSQL = "INSERT INTO character_settings (guid, source, data) VALUES (" .. playerData.guid .. ", 'mod-individual-progression', '" .. dataString .. "')"
+        print("Debug: INSERT SQL Query: " .. insertSQL)  
+        CharDBExecute(insertSQL)
+    end
 end
 
+function IndividualProgression.Individual_OnPlayerLogout(event, player)
+    print("Debug: Individual_OnPlayerLogout triggered") 
+    local tier = player:GetUInt32Value(IndividualProgression.PlayerTierKey)
+    local tierChanged = player:GetUInt32Value(IndividualProgression.PlayerChangedTierKey)
+    local guid = player:GetGUIDLow()
+    local playerData = {
+        tier = tier,
+        tierChanged = tierChanged,
+        guid = guid
+    }
+    CreateLuaEvent(function(eventId, delay, repeats) IndividualProgression.DelayedDatabaseUpdate(eventId, delay, repeats, playerData) end, 1000, 1)
+end
 
+RegisterCreatureGossipEvent(IndividualProgression.npcId, 1, IndividualProgression.OnGossipHello)
+RegisterCreatureGossipEvent(IndividualProgression.npcId, 2, IndividualProgression.OnGossipSelect)
 RegisterPlayerEvent(4, IndividualProgression.Individual_OnPlayerLogout)
