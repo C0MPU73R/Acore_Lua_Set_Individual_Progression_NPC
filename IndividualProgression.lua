@@ -1,5 +1,9 @@
 IndividualProgression = {}
 
+local SELECT_SQL = "SELECT data FROM character_settings WHERE guid = %d AND source = 'mod-individual-progression'"
+local UPSERT_SQL = "INSERT INTO character_settings (guid, source, data) VALUES (%d, 'mod-individual-progression', '%u') ON DUPLICATE KEY UPDATE data = VALUES(data)"
+local DELETE_SQL = "DELETE FROM character_settings WHERE guid = %d AND source = 'mod-individual-progression'"
+
 IndividualProgression.npcId = 50000
 IndividualProgression.PlayerChangedTierKey = 1001
 IndividualProgression.mainMenu = "|TInterface\\icons\\inv_helmet_74:45:45:-40|t|cff00008bSet Individual Progression |r"
@@ -47,6 +51,7 @@ function IndividualProgression.getTextWithoutIcon(option)
 end
 
 function IndividualProgression.OnGossipHello(event, player, object)
+  -- Add menu options to the gossip window
   player:GossipMenuAddItem(0, IndividualProgression.mainMenu, 0, 1)
   player:GossipMenuAddItem(0, "|TInterface\\icons\\inv_scroll_03:45:45:-40|t |cff00008bWhat is Individual Progression?|r", 0, 200)
   player:GossipSendMenu(1, object)
@@ -54,16 +59,16 @@ function IndividualProgression.OnGossipHello(event, player, object)
   object:SendUnitSay("Speaking with me will allow you to artificially set what stage of the game you'd like to be in, thereby bypassing any normal progression.", 0)
 
   local guid = player:GetGUIDLow()
-
-  local query = CharDBQuery("SELECT data FROM character_settings WHERE guid = " .. guid .. " AND source = 'mod-individual-progression'")
-  CharDBExecute("UPDATE character_settings SET data = TRIM(data) WHERE source = 'mod-individual-progression'")
+  local query = CharDBQuery(string.format(SELECT_SQL, guid))
+  
   if query then
-    local playerProgressionTier = tonumber(query:GetString(0)) -- Update this line
-    local playerProgressionInfo = IndividualProgression.options[playerProgressionTier + 1]
-
-    object:SendUnitWhisper("Your current progression level is: " .. IndividualProgression.optionsWithoutIcon[playerProgressionTier + 1], 0, player)
+    local playerProgressionTier = query:GetString(0)
+    if playerProgressionTier then  -- Check if the value is not nil
+      playerProgressionTier = tonumber(playerProgressionTier)
+      object:SendUnitWhisper("Your current progression level is: " .. IndividualProgression.optionsWithoutIcon[playerProgressionTier + 1], 0, player)
+    end
   else
-    CharDBExecute("INSERT INTO character_settings (guid, source, data) VALUES (" .. guid .. ", 'mod-individual-progression', '0')") -- Update this line
+    CharDBExecute(string.format(INSERT_SQL, guid, 0))
     object:SendUnitWhisper("You have not set any individual progression. Contact a GM for help.", 0, player)
   end
 end
@@ -74,7 +79,25 @@ function IndividualProgression.ShowIndividualProgressionExplanation(player, obje
   player:GossipSendMenu(1, object)
 end
 
-IndividualProgression.PlayerTierKey = 1000 
+IndividualProgression.PlayerTierKey = 1000
+
+function BroadcastTimer(eventId, delay, repeats, playerGUID, secondsLeft)
+  local player = GetPlayerByGUID(playerGUID)
+  if player then
+    if secondsLeft > 0 then
+      player:SendBroadcastMessage("You will be kicked in " .. secondsLeft .. " seconds.")
+    else
+      player:SendBroadcastMessage("We'll see you again soon!")
+    end
+  end
+end
+
+function KickPlayerDelayed(eventId, delay, repeats, playerGUID)
+  local player = GetPlayerByGUID(playerGUID)
+  if player then
+    player:KickPlayer()
+  end
+end
 
 function IndividualProgression.OnGossipSelect(event, player, object, sender, intid, code)
   if intid == 1 then
@@ -93,22 +116,25 @@ function IndividualProgression.OnGossipSelect(event, player, object, sender, int
     local tier = intid - 2
     if tier >= 0 then
       player:SetUInt32Value(IndividualProgression.PlayerTierKey, tier)
-      player:SetUInt32Value(IndividualProgression.PlayerChangedTierKey, 1) -- Set the flag to indicate that the player has changed their progression
+      player:SetUInt32Value(IndividualProgression.PlayerChangedTierKey, 1)  -- Set the flag to indicate that the player has changed their progression
       player:GossipComplete()
       player:SendBroadcastMessage("Your individual progression will be set to " .. IndividualProgression.optionsWithoutIcon[intid - 1] .. " upon logout.")
+      
+      local playerGUID = player:GetGUID()
+      
+      for i = 5, 0, -1 do
+        CreateLuaEvent(function(eventId, delay, repeats) BroadcastTimer(eventId, delay, repeats, playerGUID, i) end, (5 - i) * 1000, 1)
+      end
+      player:SendBroadcastMessage("You will be kicked from the server in 5 seconds to apply changes.")
+      CreateLuaEvent(function(eventId, delay, repeats) KickPlayerDelayed(eventId, delay, repeats, playerGUID) end, 6000, 1)
     end
   end
 end
 
 function IndividualProgression.DelayedDatabaseUpdate(eventId, delay, repeats, playerData)
-
-    if playerData.tier >= 0 and playerData.tierChanged == 1 then
-        local deleteSQL = "DELETE FROM character_settings WHERE guid = " .. playerData.guid .. " AND source = 'mod-individual-progression'"
-        CharDBExecute(deleteSQL)
-        local dataString = string.format("%u", playerData.tier)
-        local insertSQL = "INSERT INTO character_settings (guid, source, data) VALUES (" .. playerData.guid .. ", 'mod-individual-progression', '" .. dataString .. "')"
-        CharDBExecute(insertSQL)
-    end
+  if playerData.tier >= 0 and playerData.tierChanged == 1 then
+    CharDBExecute(string.format(UPSERT_SQL, playerData.guid, playerData.tier))
+  end
 end
 
 function IndividualProgression.Individual_OnPlayerLogout(event, player)
@@ -120,7 +146,7 @@ function IndividualProgression.Individual_OnPlayerLogout(event, player)
         tierChanged = tierChanged,
         guid = guid
     }
-    CreateLuaEvent(function(eventId, delay, repeats) IndividualProgression.DelayedDatabaseUpdate(eventId, delay, repeats, playerData) end, 550, 1)
+    CreateLuaEvent(function(eventId, delay, repeats) IndividualProgression.DelayedDatabaseUpdate(eventId, delay, repeats, playerData) end, 700, 1)
 end
 
 RegisterCreatureGossipEvent(IndividualProgression.npcId, 1, IndividualProgression.OnGossipHello)
