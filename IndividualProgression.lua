@@ -4,6 +4,10 @@ local SELECT_SQL = "SELECT data FROM character_settings WHERE guid = %d AND sour
 local UPSERT_SQL = "INSERT INTO character_settings (guid, source, data) VALUES (%d, 'mod-individual-progression', '%u') ON DUPLICATE KEY UPDATE data = VALUES(data)"
 local DELETE_SQL = "DELETE FROM character_settings WHERE guid = %d AND source = 'mod-individual-progression'"
 
+IndividualProgression.RestrictBeyondVanilla = false -- Set to false to allow progression beyond Vanilla
+IndividualProgression.RestrictBeyondTBC = false     -- Set to false to allow progression beyond TBC
+
+
 IndividualProgression.npcId = 50000
 IndividualProgression.PlayerChangedTierKey = 1001
 IndividualProgression.mainMenu = "|TInterface\\icons\\inv_helmet_74:45:45:-40|t|cff00008bSet Individual Progression |r"
@@ -51,7 +55,6 @@ function IndividualProgression.getTextWithoutIcon(option)
 end
 
 function IndividualProgression.OnGossipHello(event, player, object)
-  -- Add menu options to the gossip window
   player:GossipMenuAddItem(0, IndividualProgression.mainMenu, 0, 1)
   player:GossipMenuAddItem(0, "|TInterface\\icons\\inv_scroll_03:45:45:-40|t |cff00008bWhat is Individual Progression?|r", 0, 200)
   player:GossipSendMenu(1, object)
@@ -115,8 +118,22 @@ function IndividualProgression.OnGossipSelect(event, player, object, sender, int
   else
     local tier = intid - 2
     if tier >= 0 then
+      -- Check if trying to progress beyond allowed content and if it's restricted
+      local isGM = player:IsGM() -- Check if the player is a Game Master
+      if not isGM then
+        if IndividualProgression.RestrictBeyondVanilla and tier > 5 then
+          player:SendBroadcastMessage("You cannot progress beyond Vanilla content as per server configuration.")
+          player:GossipComplete()
+          return
+        elseif IndividualProgression.RestrictBeyondTBC and tier > 10 then
+          player:SendBroadcastMessage("You cannot progress beyond TBC content as per server configuration.")
+          player:GossipComplete()
+          return
+        end
+      end
+      
       player:SetUInt32Value(IndividualProgression.PlayerTierKey, tier)
-      player:SetUInt32Value(IndividualProgression.PlayerChangedTierKey, 1)  -- Set the flag to indicate that the player has changed their progression
+      player:SetUInt32Value(IndividualProgression.PlayerChangedTierKey, 1)  
       player:GossipComplete()
       player:SendBroadcastMessage("Your individual progression will be set to " .. IndividualProgression.optionsWithoutIcon[intid - 1] .. " upon logout.")
       
